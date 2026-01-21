@@ -1,0 +1,43 @@
+{
+  "name": "@dotdo/vitess-postgres",
+  "version": "0.1.0-rc.1",
+  "description": "PostgreSQL storage engine for Vitess.do using PGlite",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "vitess",
+    "postgresql",
+    "pglite",
+    "storage-engine"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dot-do/vitess.git",
+    "directory": "packages/vitess-postgres"
+  },
+  "dependencies": {
+    "@dotdo/vitess-rpc": "workspace:*",
+    "@electric-sql/pglite": "^0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  }
+}

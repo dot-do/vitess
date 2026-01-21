@@ -1,0 +1,56 @@
+{
+  "name": "@dotdo/vitess",
+  "version": "0.1.0-rc.1",
+  "description": "Vitess-style distributed sharding for Cloudflare Workers - supports Postgres and SQLite backends",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [
+    "vitess",
+    "sharding",
+    "cloudflare",
+    "workers",
+    "durable-objects",
+    "postgresql",
+    "sqlite"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dot-do/vitess.git",
+    "directory": "packages/vitess"
+  },
+  "dependencies": {
+    "@dotdo/vitess-rpc": "workspace:*",
+    "@dotdo/vitess-postgres": "workspace:*",
+    "@dotdo/vitess-sqlite": "workspace:*",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.0.0"
+  }
+}
