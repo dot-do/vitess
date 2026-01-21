@@ -624,14 +624,22 @@ export function translatePostgresToSQLite(sql: string): string {
 // Internal Transaction State
 // ============================================================================
 
+interface BufferedStatement {
+  sql: string;
+  params: unknown[];
+}
+
 interface TransactionState {
   id: string;
-  tx: Transaction;
+  tx: Transaction | null;  // null when using buffered mode
   readOnly: boolean;
   timeout?: number;
   timeoutTimer?: ReturnType<typeof setTimeout>;
   startTime: number;
   expired: boolean;
+  // Buffered mode for concurrent transaction support
+  bufferedMode: boolean;
+  statements: BufferedStatement[];
 }
 
 // Track expired transactions separately to return correct error messages
@@ -674,6 +682,34 @@ async function withRetry<T>(
  * Implements the Vitess storage engine interface for SQLite databases,
  * with support for local files, in-memory databases, and Turso cloud.
  */
+/**
+ * Simple async mutex for serializing write operations
+ */
+class AsyncMutex {
+  private locked: boolean = false;
+  private queue: Array<() => void> = [];
+
+  async acquire(): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.locked) {
+        this.locked = true;
+        resolve();
+      } else {
+        this.queue.push(resolve);
+      }
+    });
+  }
+
+  release(): void {
+    if (this.queue.length > 0) {
+      const next = this.queue.shift()!;
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+}
+
 export class TursoAdapter {
   private readonly config: TursoAdapterConfig;
   private client: Client | null = null;
@@ -682,6 +718,7 @@ export class TursoAdapter {
   private transactions: Map<string, TransactionState> = new Map();
   private txCounter: number = 0;
   private pendingQueries: Set<{ reject: (err: Error) => void }> = new Set();
+  private writeMutex: AsyncMutex = new AsyncMutex();
 
   /**
    * Storage engine type identifier
@@ -1027,20 +1064,38 @@ export class TursoAdapter {
       // Check for timeout (in case we haven't caught it yet)
       if (txState.timeout && Date.now() - txState.startTime > txState.timeout) {
         txState.expired = true;
-        try {
-          await txState.tx.rollback();
-        } catch { /* ignore */ }
+        if (txState.tx) {
+          try { await txState.tx.rollback(); } catch { /* ignore */ }
+        }
         this.transactions.delete(options.txId);
         expiredTransactions.add(options.txId);
         throw new TransactionError(`Transaction timeout expired: ${options.txId}`, 'TRANSACTION_EXPIRED', options.txId);
       }
 
-      // Execute query within the transaction
+      // For buffered mode, execute queries directly on client
+      // (writes haven't happened yet, so read from current DB state)
+      if (txState.bufferedMode) {
+        try {
+          const startTime = performance.now();
+          const result = await this.client!.execute({
+            sql: translated.sql,
+            args: translated.params as any[],
+          });
+          const duration = performance.now() - startTime;
+          return this.toQueryResult<T>(result, duration);
+        } catch (error) {
+          throw this.convertError(error as Error, sql, params);
+        }
+      }
+
+      // Execute query within the real transaction with retry for SQLITE_BUSY
       try {
         const startTime = performance.now();
-        const result = await txState.tx.execute({
-          sql: translated.sql,
-          args: translated.params as any[],
+        const result = await withRetry(async () => {
+          return txState.tx!.execute({
+            sql: translated.sql,
+            args: translated.params as any[],
+          });
         });
         const duration = performance.now() - startTime;
         return this.toQueryResult<T>(result, duration);
@@ -1133,7 +1188,9 @@ export class TursoAdapter {
       // Check for timeout (in case we haven't caught it yet)
       if (txState.timeout && Date.now() - txState.startTime > txState.timeout) {
         txState.expired = true;
-        try { txState.tx.rollback(); } catch { /* ignore */ }
+        if (txState.tx) {
+          try { txState.tx.rollback(); } catch { /* ignore */ }
+        }
         this.transactions.delete(options.txId);
         expiredTransactions.add(options.txId);
         throw new TransactionError(`Transaction timeout expired: ${options.txId}`, 'TRANSACTION_EXPIRED', options.txId);
@@ -1158,11 +1215,26 @@ export class TursoAdapter {
         }
       }
 
-      // Execute write within the transaction
-      try {
-        const result = await txState.tx.execute({
+      // For buffered transactions, add to the buffer
+      if (txState.bufferedMode) {
+        txState.statements.push({
           sql: translated.sql,
-          args: translated.params as any[],
+          params: translated.params,
+        });
+        // Return a placeholder result - actual execution happens at commit
+        return {
+          rowsAffected: 0,
+          lastInsertId: undefined,
+        };
+      }
+
+      // Execute write within the real transaction with retry for SQLITE_BUSY
+      try {
+        const result = await withRetry(async () => {
+          return txState.tx!.execute({
+            sql: translated.sql,
+            args: translated.params as any[],
+          });
         });
         return this.toExecuteResult(result);
       } catch (error) {
@@ -1201,12 +1273,30 @@ export class TursoAdapter {
         throw new TransactionError(`Transaction expired: ${options.txId}`, 'TRANSACTION_EXPIRED', options.txId);
       }
 
+      // For buffered mode, convert to real transaction for batch operations
+      if (txState.bufferedMode && !txState.tx) {
+        await this.writeMutex.acquire();
+        try {
+          const tx = await this.client!.transaction('write');
+          txState.tx = tx;
+          // Execute any buffered statements first
+          for (const stmt of txState.statements) {
+            await tx.execute({ sql: stmt.sql, args: stmt.params as any[] });
+          }
+          txState.statements = [];
+          txState.bufferedMode = false;
+        } catch (error) {
+          this.writeMutex.release();
+          throw this.convertError(error as Error);
+        }
+      }
+
       try {
         for (let i = 0; i < statements.length; i++) {
           const stmt = statements[i];
           const translated = this.translateForDialect(stmt.sql, stmt.params, dialect);
           const startTime = performance.now();
-          const result = await txState.tx.execute({
+          const result = await txState.tx!.execute({
             sql: translated.sql,
             args: translated.params as any[],
           });
@@ -1246,38 +1336,57 @@ export class TursoAdapter {
     this.ensureReady();
 
     const txId = `tx_${++this.txCounter}_${Date.now()}`;
-
-    // For write transactions, acquire the global write lock to serialize
     const isReadOnly = options?.readOnly ?? false;
-    if (!isReadOnly) {
-      await globalWriteLock.acquire();
-    }
 
-    try {
-      // Map transaction modes to libsql equivalents
-      let mode: 'write' | 'read' | 'deferred' = 'deferred';
-      if (isReadOnly) {
-        mode = 'read';
-      } else if (options?.mode === 'immediate' || options?.mode === 'exclusive') {
-        mode = 'write';
-      }
+    // Use buffered mode for write transactions to support concurrent "transactions"
+    // Real SQLite transaction is created at commit time
+    const useBufferedMode = !isReadOnly;
 
-      const tx = await this.client!.transaction(mode);
-
+    if (useBufferedMode) {
       const txState: TransactionState = {
         id: txId,
-        tx,
-        readOnly: options?.readOnly ?? false,
+        tx: null,
+        readOnly: false,
         timeout: options?.timeout,
         startTime: Date.now(),
         expired: false,
+        bufferedMode: true,
+        statements: [],
       };
 
       // Set up timeout if specified
       if (options?.timeout) {
         txState.timeoutTimer = setTimeout(async () => {
           txState.expired = true;
-          // Rollback the expired transaction
+          this.transactions.delete(txId);
+          expiredTransactions.add(txId);
+        }, options.timeout);
+      }
+
+      this.transactions.set(txId, txState);
+      this.emit('transaction:begin', txId);
+      return txId;
+    }
+
+    // For read-only transactions, use real libsql transaction
+    try {
+      const tx = await this.client!.transaction('read');
+
+      const txState: TransactionState = {
+        id: txId,
+        tx,
+        readOnly: true,
+        timeout: options?.timeout,
+        startTime: Date.now(),
+        expired: false,
+        bufferedMode: false,
+        statements: [],
+      };
+
+      // Set up timeout if specified
+      if (options?.timeout) {
+        txState.timeoutTimer = setTimeout(async () => {
+          txState.expired = true;
           try {
             await tx.rollback();
           } catch {
@@ -1285,10 +1394,6 @@ export class TursoAdapter {
           }
           this.transactions.delete(txId);
           expiredTransactions.add(txId);
-          // Release write lock for non-readonly transactions
-          if (!isReadOnly) {
-            globalWriteLock.release();
-          }
         }, options.timeout);
       }
 
@@ -1297,10 +1402,6 @@ export class TursoAdapter {
 
       return txId;
     } catch (error) {
-      // Release write lock if transaction start fails
-      if (!isReadOnly) {
-        globalWriteLock.release();
-      }
       throw this.convertError(error as Error);
     }
   }
@@ -1318,19 +1419,45 @@ export class TursoAdapter {
       clearTimeout(txState.timeoutTimer);
     }
 
+    // Track if we need to release the mutex (acquired when converting buffered to real tx)
+    const needsMutexRelease = txState.tx && !txState.bufferedMode && !txState.readOnly;
+
     try {
-      await txState.tx.commit();
-      this.transactions.delete(txId);
-      // Release write lock for non-readonly transactions
-      if (!txState.readOnly) {
-        globalWriteLock.release();
+      if (txState.bufferedMode && txState.statements.length > 0) {
+        // Execute all buffered statements as a batch in a real transaction
+        await this.writeMutex.acquire();
+        try {
+          const tx = await this.client!.transaction('write');
+          try {
+            for (const stmt of txState.statements) {
+              await tx.execute({
+                sql: stmt.sql,
+                args: stmt.params as any[],
+              });
+            }
+            await tx.commit();
+          } catch (error) {
+            await tx.rollback().catch(() => {});
+            throw error;
+          }
+        } finally {
+          this.writeMutex.release();
+        }
+      } else if (txState.tx) {
+        // For real transaction, just commit
+        await txState.tx.commit();
+        // Release mutex if it was acquired when converting from buffered
+        if (needsMutexRelease) {
+          this.writeMutex.release();
+        }
       }
+      this.transactions.delete(txId);
       this.emit('transaction:commit', txId);
     } catch (error) {
       this.transactions.delete(txId);
-      // Release write lock on error too
-      if (!txState.readOnly) {
-        globalWriteLock.release();
+      // Release mutex on error too
+      if (needsMutexRelease) {
+        this.writeMutex.release();
       }
       throw this.convertError(error as Error);
     }
@@ -1349,19 +1476,28 @@ export class TursoAdapter {
       clearTimeout(txState.timeoutTimer);
     }
 
+    // Track if we need to release the mutex (acquired when converting buffered to real tx)
+    const needsMutexRelease = txState.tx && !txState.bufferedMode && !txState.readOnly;
+
     try {
-      await txState.tx.rollback();
-      this.transactions.delete(txId);
-      // Release write lock for non-readonly transactions
-      if (!txState.readOnly) {
-        globalWriteLock.release();
+      if (txState.bufferedMode) {
+        // For buffered transactions, just clear the buffer
+        txState.statements.length = 0;
+      } else if (txState.tx) {
+        // For real transaction, rollback
+        await txState.tx.rollback();
+        // Release mutex if it was acquired when converting from buffered
+        if (needsMutexRelease) {
+          this.writeMutex.release();
+        }
       }
+      this.transactions.delete(txId);
       this.emit('transaction:rollback', txId);
     } catch (error) {
       this.transactions.delete(txId);
-      // Release write lock on error too
-      if (!txState.readOnly) {
-        globalWriteLock.release();
+      // Release mutex on error too
+      if (needsMutexRelease) {
+        this.writeMutex.release();
       }
       throw this.convertError(error as Error);
     }
@@ -1376,8 +1512,26 @@ export class TursoAdapter {
       throw new TransactionError(`Transaction not found: ${options.txId}`, 'TRANSACTION_NOT_FOUND', options.txId);
     }
 
+    // Convert buffered transaction to real transaction for savepoint support
+    if (txState.bufferedMode && !txState.tx) {
+      await this.writeMutex.acquire();
+      try {
+        const tx = await this.client!.transaction('write');
+        txState.tx = tx;
+        // Execute any buffered statements first
+        for (const stmt of txState.statements) {
+          await tx.execute({ sql: stmt.sql, args: stmt.params as any[] });
+        }
+        txState.statements = [];
+        txState.bufferedMode = false;
+      } catch (error) {
+        this.writeMutex.release();
+        throw this.convertError(error as Error);
+      }
+    }
+
     try {
-      await txState.tx.execute(`SAVEPOINT ${name}`);
+      await txState.tx!.execute(`SAVEPOINT ${name}`);
     } catch (error) {
       throw this.convertError(error as Error);
     }
@@ -1390,6 +1544,10 @@ export class TursoAdapter {
     const txState = this.transactions.get(options.txId);
     if (!txState) {
       throw new TransactionError(`Transaction not found: ${options.txId}`, 'TRANSACTION_NOT_FOUND', options.txId);
+    }
+
+    if (!txState.tx) {
+      throw new TransactionError(`Cannot rollback to savepoint in buffered transaction`, 'INVALID_OPERATION', options.txId);
     }
 
     try {
@@ -1406,6 +1564,10 @@ export class TursoAdapter {
     const txState = this.transactions.get(options.txId);
     if (!txState) {
       throw new TransactionError(`Transaction not found: ${options.txId}`, 'TRANSACTION_NOT_FOUND', options.txId);
+    }
+
+    if (!txState.tx) {
+      throw new TransactionError(`Cannot release savepoint in buffered transaction`, 'INVALID_OPERATION', options.txId);
     }
 
     try {
