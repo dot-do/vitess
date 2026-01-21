@@ -46,6 +46,8 @@ export interface VindexParams {
   to?: string;
   /** For consistent hash: number of virtual nodes */
   vnodes?: number;
+  /** For lookup vindex: unique flag */
+  unique?: boolean;
 }
 
 /**
@@ -108,6 +110,124 @@ export interface Vindex {
 }
 
 /**
+ * Simple MD5-like hash implementation (simplified for browser/edge compatibility)
+ */
+function simpleHash(str: string): Uint8Array {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+  const result = new Uint8Array(8);
+  const view = new DataView(result.buffer);
+  view.setUint32(0, h1 >>> 0, false);
+  view.setUint32(4, h2 >>> 0, false);
+  return result;
+}
+
+/**
+ * xxHash-style hash (simplified)
+ */
+function xxhashStyle(str: string): Uint8Array {
+  const PRIME1 = 2654435761;
+  const PRIME2 = 2246822519;
+  const PRIME3 = 3266489917;
+  const PRIME4 = 668265263;
+  const PRIME5 = 374761393;
+
+  let h32 = PRIME5;
+  const len = str.length;
+
+  for (let i = 0; i < len; i++) {
+    h32 += str.charCodeAt(i) * PRIME3;
+    h32 = Math.imul((h32 << 17) | (h32 >>> 15), PRIME4);
+  }
+
+  h32 ^= len;
+  h32 ^= h32 >>> 15;
+  h32 = Math.imul(h32, PRIME2);
+  h32 ^= h32 >>> 13;
+  h32 = Math.imul(h32, PRIME3);
+  h32 ^= h32 >>> 16;
+
+  // Generate 64-bit result
+  let h64_high = h32;
+  let h64_low = Math.imul(h32, PRIME1) ^ PRIME2;
+
+  const result = new Uint8Array(8);
+  const view = new DataView(result.buffer);
+  view.setUint32(0, h64_high >>> 0, false);
+  view.setUint32(4, h64_low >>> 0, false);
+  return result;
+}
+
+/**
+ * murmur3-style hash (simplified)
+ */
+function murmur3Style(str: string): Uint8Array {
+  const c1 = 0xcc9e2d51;
+  const c2 = 0x1b873593;
+  let h1 = 0;
+
+  for (let i = 0; i < str.length; i++) {
+    let k1 = str.charCodeAt(i);
+    k1 = Math.imul(k1, c1);
+    k1 = (k1 << 15) | (k1 >>> 17);
+    k1 = Math.imul(k1, c2);
+    h1 ^= k1;
+    h1 = (h1 << 13) | (h1 >>> 19);
+    h1 = Math.imul(h1, 5) + 0xe6546b64;
+  }
+
+  h1 ^= str.length;
+  h1 ^= h1 >>> 16;
+  h1 = Math.imul(h1, 0x85ebca6b);
+  h1 ^= h1 >>> 13;
+  h1 = Math.imul(h1, 0xc2b2ae35);
+  h1 ^= h1 >>> 16;
+
+  // Generate second 32 bits differently
+  let h2 = Math.imul(h1, 0x9e3779b9);
+
+  const result = new Uint8Array(8);
+  const view = new DataView(result.buffer);
+  view.setUint32(0, h1 >>> 0, false);
+  view.setUint32(4, h2 >>> 0, false);
+  return result;
+}
+
+/**
+ * Convert value to string for hashing
+ */
+function valueToString(value: unknown): string {
+  if (value === null || value === undefined) {
+    throw new Error('Cannot hash null or undefined value');
+  }
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  if (typeof value === 'number') {
+    return value.toString();
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value instanceof Uint8Array) {
+    return Array.from(value).map(b => String.fromCharCode(b)).join('');
+  }
+  return String(value);
+}
+
+/**
  * Hash vindex - MD5/murmur hash of column value
  */
 export class HashVindex implements Vindex {
@@ -122,8 +242,27 @@ export class HashVindex implements Vindex {
   }
 
   map(value: unknown): KeyspaceId[] {
-    // TODO: Implement hash mapping
-    throw new Error('Not implemented');
+    if (value === null || value === undefined) {
+      throw new Error('Cannot hash null or undefined value');
+    }
+
+    const str = valueToString(value);
+
+    let result: Uint8Array;
+    switch (this.hashFunction) {
+      case 'xxhash':
+        result = xxhashStyle(str);
+        break;
+      case 'murmur3':
+        result = murmur3Style(str);
+        break;
+      case 'md5':
+      default:
+        result = simpleHash(str);
+        break;
+    }
+
+    return [result];
   }
 }
 
@@ -137,6 +276,7 @@ export class ConsistentHashVindex implements Vindex {
 
   private vnodes: number;
   private ring: Map<number, string> = new Map();
+  private sortedKeys: number[] = [];
 
   constructor(params?: VindexParams) {
     this.vnodes = params?.vnodes ?? 150;
@@ -146,21 +286,71 @@ export class ConsistentHashVindex implements Vindex {
    * Initialize the hash ring with shards
    */
   initRing(shards: string[]): void {
-    // TODO: Implement ring initialization
-    throw new Error('Not implemented');
+    this.ring.clear();
+    this.sortedKeys = [];
+
+    for (const shard of shards) {
+      for (let i = 0; i < this.vnodes; i++) {
+        const key = `${shard}:${i}`;
+        const hash = this.hashKey(key);
+        this.ring.set(hash, shard);
+        this.sortedKeys.push(hash);
+      }
+    }
+
+    this.sortedKeys.sort((a, b) => a - b);
+  }
+
+  private hashKey(key: string): number {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      const char = key.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash >>> 0; // Make unsigned
   }
 
   map(value: unknown): KeyspaceId[] {
-    // TODO: Implement consistent hash mapping
-    throw new Error('Not implemented');
+    if (value === null || value === undefined) {
+      throw new Error('Cannot hash null or undefined value');
+    }
+
+    const str = valueToString(value);
+    const hash = simpleHash(str);
+
+    return [hash];
   }
 
   /**
    * Get target shard for a keyspace ID
    */
   getShard(keyspaceId: KeyspaceId): string {
-    // TODO: Implement shard lookup
-    throw new Error('Not implemented');
+    if (this.sortedKeys.length === 0) {
+      throw new Error('Ring not initialized - call initRing first');
+    }
+
+    // Convert keyspace ID to number for ring lookup
+    const view = new DataView(keyspaceId.buffer, keyspaceId.byteOffset, keyspaceId.byteLength);
+    const hash = view.getUint32(0, false);
+
+    // Binary search for the first key >= hash
+    let low = 0;
+    let high = this.sortedKeys.length;
+
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (this.sortedKeys[mid] < hash) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    // Wrap around if needed
+    const index = low >= this.sortedKeys.length ? 0 : low;
+    const ringKey = this.sortedKeys[index];
+    return this.ring.get(ringKey)!;
   }
 }
 
@@ -179,16 +369,51 @@ export class RangeVindex implements Vindex {
   }
 
   map(value: unknown): KeyspaceId[] {
-    // TODO: Implement range mapping
-    throw new Error('Not implemented');
+    if (value === null || value === undefined) {
+      throw new Error('Cannot map null or undefined value');
+    }
+
+    const numValue = typeof value === 'bigint' ? value : BigInt(Number(value));
+    const shard = this.findShard(numValue);
+
+    // Generate a keyspace ID based on the value
+    const result = new Uint8Array(8);
+    const view = new DataView(result.buffer);
+
+    // Use the numeric value to create the keyspace ID
+    if (numValue <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      const num = Number(numValue);
+      view.setUint32(0, (num / 0x100000000) >>> 0, false);
+      view.setUint32(4, num >>> 0, false);
+    } else {
+      // For bigint, take lower 64 bits
+      const low = Number(numValue & BigInt(0xFFFFFFFF));
+      const high = Number((numValue >> BigInt(32)) & BigInt(0xFFFFFFFF));
+      view.setUint32(0, high >>> 0, false);
+      view.setUint32(4, low >>> 0, false);
+    }
+
+    return [result];
   }
 
   /**
    * Find shard for a numeric value
    */
   findShard(value: bigint | number): string | undefined {
-    // TODO: Implement shard finding
-    throw new Error('Not implemented');
+    const numValue = typeof value === 'bigint' ? value : BigInt(value);
+
+    for (const range of this.ranges) {
+      const from = typeof range.from === 'bigint' ? range.from :
+                   typeof range.from === 'string' ? BigInt(range.from) : BigInt(range.from);
+      const to = typeof range.to === 'bigint' ? range.to :
+                 typeof range.to === 'string' ? BigInt(range.to) : BigInt(range.to);
+
+      if (numValue >= from && numValue < to) {
+        return range.shard;
+      }
+    }
+
+    return undefined;
   }
 }
 
@@ -204,6 +429,9 @@ export class LookupVindex implements Vindex {
   private fromColumns: string[];
   private toColumn: string;
 
+  // In-memory storage for test purposes
+  private storage: Map<string, Uint8Array[]> = new Map();
+
   constructor(params: VindexParams & { unique?: boolean }) {
     this.tableName = params.table ?? '';
     this.fromColumns = params.from ?? [];
@@ -217,18 +445,53 @@ export class LookupVindex implements Vindex {
   }
 
   async verify(values: unknown[], keyspaceIds: KeyspaceId[]): Promise<boolean[]> {
-    // TODO: Implement lookup verification
-    throw new Error('Not implemented');
+    const results: boolean[] = [];
+
+    for (let i = 0; i < values.length; i++) {
+      const key = String(values[i]);
+      const stored = this.storage.get(key);
+
+      if (!stored) {
+        results.push(false);
+      } else {
+        // Check if the keyspace ID matches any stored
+        const matches = stored.some(storedId =>
+          keyspaceIds[i].length === storedId.length &&
+          keyspaceIds[i].every((b, j) => b === storedId[j])
+        );
+        results.push(matches);
+      }
+    }
+
+    return results;
   }
 
   async create(values: unknown[], keyspaceIds: KeyspaceId[]): Promise<void> {
-    // TODO: Implement lookup entry creation
-    throw new Error('Not implemented');
+    for (let i = 0; i < values.length; i++) {
+      const key = String(values[i]);
+      const existing = this.storage.get(key) ?? [];
+      existing.push(keyspaceIds[i]);
+      this.storage.set(key, existing);
+    }
   }
 
   async delete(values: unknown[], keyspaceIds: KeyspaceId[]): Promise<void> {
-    // TODO: Implement lookup entry deletion
-    throw new Error('Not implemented');
+    for (let i = 0; i < values.length; i++) {
+      const key = String(values[i]);
+      const existing = this.storage.get(key);
+
+      if (existing) {
+        const filtered = existing.filter(storedId =>
+          keyspaceIds[i].length !== storedId.length ||
+          !keyspaceIds[i].every((b, j) => b === storedId[j])
+        );
+        if (filtered.length === 0) {
+          this.storage.delete(key);
+        } else {
+          this.storage.set(key, filtered);
+        }
+      }
+    }
   }
 }
 
@@ -271,22 +534,83 @@ export function computeKeyspaceId(vindex: Vindex, value: unknown): KeyspaceId {
  * Route a keyspace ID to a shard
  */
 export function routeToShard(keyspaceId: KeyspaceId, shards: string[]): string {
-  // TODO: Implement shard routing
-  throw new Error('Not implemented');
+  if (shards.length === 0) {
+    throw new Error('No shards available');
+  }
+
+  if (shards.length === 1) {
+    return shards[0];
+  }
+
+  // Convert keyspace ID to bigint for comparison
+  const view = new DataView(keyspaceId.buffer, keyspaceId.byteOffset, keyspaceId.byteLength);
+  const high = view.getUint32(0, false);
+  const low = view.getUint32(4, false);
+  const keyspaceValue = (BigInt(high) << BigInt(32)) | BigInt(low);
+
+  // Find the shard that contains this keyspace ID
+  for (const shard of shards) {
+    const range = parseShardRange(shard);
+    if (keyspaceValue >= range.start && keyspaceValue < range.end) {
+      return shard;
+    }
+  }
+
+  // Should not reach here if shards cover full keyspace
+  throw new Error(`No shard found for keyspace ID`);
 }
 
 /**
  * Parse shard range (e.g., '-80', '80-', '40-80')
  */
 export function parseShardRange(shard: string): { start: bigint; end: bigint } {
-  // TODO: Implement shard range parsing
-  throw new Error('Not implemented');
+  if (!shard) {
+    throw new Error('Empty shard range');
+  }
+
+  // Unsharded range
+  if (shard === '-') {
+    return {
+      start: BigInt(0),
+      end: BigInt('0xffffffffffffffff') + BigInt(1),
+    };
+  }
+
+  const parts = shard.split('-');
+  if (parts.length !== 2) {
+    throw new Error(`Invalid shard range format: ${shard}`);
+  }
+
+  const [startStr, endStr] = parts;
+
+  // Parse start (empty means 0)
+  const start = startStr
+    ? BigInt('0x' + startStr.padEnd(16, '0'))
+    : BigInt(0);
+
+  // Parse end (empty means max+1)
+  const end = endStr
+    ? BigInt('0x' + endStr.padEnd(16, '0'))
+    : BigInt('0xffffffffffffffff') + BigInt(1);
+
+  if (start >= end) {
+    throw new Error(`Invalid shard range: start (${start}) must be less than end (${end})`);
+  }
+
+  return { start, end };
 }
 
 /**
  * Check if a keyspace ID falls within a shard range
  */
 export function keyspaceIdInShard(keyspaceId: KeyspaceId, shard: string): boolean {
-  // TODO: Implement keyspace ID in shard check
-  throw new Error('Not implemented');
+  const range = parseShardRange(shard);
+
+  // Convert keyspace ID to bigint
+  const view = new DataView(keyspaceId.buffer, keyspaceId.byteOffset, keyspaceId.byteLength);
+  const high = view.getUint32(0, false);
+  const low = view.getUint32(4, false);
+  const keyspaceValue = (BigInt(high) << BigInt(32)) | BigInt(low);
+
+  return keyspaceValue >= range.start && keyspaceValue < range.end;
 }

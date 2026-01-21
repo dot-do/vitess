@@ -13,3 +13,4 @@ export * from './vttablet.js';
 export * from './vschema.js';
 export * from './vindexes.js';
 export * from './aggregation.js';
+export * from './coordinator.js';

@@ -369,3 +369,694 @@ export function createErrorResponse(
     ...options,
   };
 }
+
+/**
+ * Create a batch request
+ */
+export function createBatchRequest(
+  statements: Array<{ sql: string; params?: unknown[] }>,
+  options?: { keyspace?: string; txId?: string }
+): BatchRequest {
+  return {
+    type: MessageType.BATCH,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    statements,
+    ...options,
+  };
+}
+
+/**
+ * Create a begin transaction request
+ */
+export function createBeginRequest(
+  options?: { keyspace?: string; options?: TransactionOptions }
+): BeginRequest {
+  return {
+    type: MessageType.BEGIN,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    ...options,
+  };
+}
+
+/**
+ * Create a commit request
+ */
+export function createCommitRequest(txId: string): CommitRequest {
+  return {
+    type: MessageType.COMMIT,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    txId,
+  };
+}
+
+/**
+ * Create a rollback request
+ */
+export function createRollbackRequest(txId: string): RollbackRequest {
+  return {
+    type: MessageType.ROLLBACK,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    txId,
+  };
+}
+
+/**
+ * Create a status request
+ */
+export function createStatusRequest(
+  options?: { keyspace?: string }
+): StatusRequest {
+  return {
+    type: MessageType.STATUS,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    ...options,
+  };
+}
+
+/**
+ * Create a health check request
+ */
+export function createHealthRequest(
+  options?: { shard?: ShardId }
+): HealthRequest {
+  return {
+    type: MessageType.HEALTH,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    ...options,
+  };
+}
+
+/**
+ * Create a schema request
+ */
+export function createSchemaRequest(
+  options?: { keyspace?: string }
+): SchemaRequest {
+  return {
+    type: MessageType.SCHEMA,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    ...options,
+  };
+}
+
+/**
+ * Create a VSchema request
+ */
+export function createVSchemaRequest(
+  options?: { keyspace?: string }
+): VSchemaRequest {
+  return {
+    type: MessageType.VSCHEMA,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    ...options,
+  };
+}
+
+/**
+ * Create a shard-level query request
+ */
+export function createShardQueryRequest(
+  shard: ShardId,
+  sql: string,
+  params?: unknown[]
+): ShardQueryRequest {
+  return {
+    type: MessageType.SHARD_QUERY,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    shard,
+    sql,
+    params,
+  };
+}
+
+/**
+ * Create a shard-level execute request
+ */
+export function createShardExecuteRequest(
+  shard: ShardId,
+  sql: string,
+  params?: unknown[]
+): ShardExecuteRequest {
+  return {
+    type: MessageType.SHARD_EXECUTE,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    shard,
+    sql,
+    params,
+  };
+}
+
+/**
+ * Create a shard-level batch request
+ */
+export function createShardBatchRequest(
+  shard: ShardId,
+  statements: Array<{ sql: string; params?: unknown[] }>
+): ShardBatchRequest {
+  return {
+    type: MessageType.SHARD_BATCH,
+    id: createMessageId(),
+    timestamp: Date.now(),
+    shard,
+    statements,
+  };
+}
+
+/**
+ * Create a query response
+ */
+export function createQueryResponse<T extends Row = Row>(
+  requestId: string,
+  result: QueryResult<T>
+): QueryResponse<T> {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    result,
+  };
+}
+
+/**
+ * Create an execute response
+ */
+export function createExecuteResponse(
+  requestId: string,
+  result: ExecuteResult
+): ExecuteResponse {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    result,
+  };
+}
+
+/**
+ * Create a batch response
+ */
+export function createBatchResponse(
+  requestId: string,
+  result: BatchResult
+): BatchResponse {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    result,
+  };
+}
+
+/**
+ * Create a begin transaction response
+ */
+export function createBeginResponse(
+  requestId: string,
+  txId: string,
+  shards: ShardId[]
+): BeginResponse {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    txId,
+    shards,
+  };
+}
+
+/**
+ * Create a status response
+ */
+export function createStatusResponse(
+  requestId: string,
+  status: ClusterStatus
+): StatusResponse {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    status,
+  };
+}
+
+/**
+ * Create a health response
+ */
+export function createHealthResponse(
+  requestId: string,
+  health: ShardHealth | ShardHealth[]
+): HealthResponse {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    health,
+  };
+}
+
+/**
+ * Create a schema response
+ */
+export function createSchemaResponse(
+  requestId: string,
+  tables: SchemaResponse['tables']
+): SchemaResponse {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    tables,
+  };
+}
+
+/**
+ * Create a VSchema response
+ */
+export function createVSchemaResponse(
+  requestId: string,
+  vschema: VSchema
+): VSchemaResponse {
+  return {
+    type: MessageType.RESULT,
+    id: requestId,
+    timestamp: Date.now(),
+    vschema,
+  };
+}
+
+/**
+ * Create an acknowledgment response
+ */
+export function createAckResponse(requestId: string): AckResponse {
+  return {
+    type: MessageType.ACK,
+    id: requestId,
+    timestamp: Date.now(),
+  };
+}
+
+// =============================================================================
+// Message Type Guards
+// =============================================================================
+
+import {
+  isQueryResult,
+  isExecuteResult,
+  isBatchResult,
+  isClusterStatus,
+  isShardHealth,
+  isVSchema,
+  isTransactionOptions,
+} from './types.js';
+
+/**
+ * Check if value is a valid MessageType enum value
+ */
+function isMessageType(value: unknown): value is MessageType {
+  return (
+    typeof value === 'number' &&
+    Object.values(MessageType).includes(value)
+  );
+}
+
+/**
+ * Check if value is a valid RpcMessage base object
+ */
+export function isRpcMessage(value: unknown): value is RpcMessage {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    isMessageType(obj.type) &&
+    typeof obj.id === 'string' &&
+    typeof obj.timestamp === 'number'
+  );
+}
+
+/**
+ * Check if value is a valid QueryRequest
+ */
+export function isQueryRequest(value: unknown): value is QueryRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.QUERY &&
+    typeof obj.sql === 'string' &&
+    obj.sql !== ''
+  );
+}
+
+/**
+ * Check if value is a valid ExecuteRequest
+ */
+export function isExecuteRequest(value: unknown): value is ExecuteRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.EXECUTE &&
+    typeof obj.sql === 'string' &&
+    obj.sql !== ''
+  );
+}
+
+/**
+ * Check if value is a valid BatchRequest
+ */
+export function isBatchRequest(value: unknown): value is BatchRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.BATCH &&
+    Array.isArray(obj.statements)
+  );
+}
+
+/**
+ * Check if value is a valid BeginRequest
+ */
+export function isBeginRequest(value: unknown): value is BeginRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  if (obj.type !== MessageType.BEGIN) {
+    return false;
+  }
+  if (obj.options !== undefined && !isTransactionOptions(obj.options)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Check if value is a valid CommitRequest
+ */
+export function isCommitRequest(value: unknown): value is CommitRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.COMMIT &&
+    typeof obj.txId === 'string'
+  );
+}
+
+/**
+ * Check if value is a valid RollbackRequest
+ */
+export function isRollbackRequest(value: unknown): value is RollbackRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.ROLLBACK &&
+    typeof obj.txId === 'string'
+  );
+}
+
+/**
+ * Check if value is a valid StatusRequest
+ */
+export function isStatusRequest(value: unknown): value is StatusRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  return (value as Record<string, unknown>).type === MessageType.STATUS;
+}
+
+/**
+ * Check if value is a valid HealthRequest
+ */
+export function isHealthRequest(value: unknown): value is HealthRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  return (value as Record<string, unknown>).type === MessageType.HEALTH;
+}
+
+/**
+ * Check if value is a valid SchemaRequest
+ */
+export function isSchemaRequest(value: unknown): value is SchemaRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  return (value as Record<string, unknown>).type === MessageType.SCHEMA;
+}
+
+/**
+ * Check if value is a valid VSchemaRequest
+ */
+export function isVSchemaRequest(value: unknown): value is VSchemaRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  return (value as Record<string, unknown>).type === MessageType.VSCHEMA;
+}
+
+/**
+ * Check if value is a valid ShardQueryRequest
+ */
+export function isShardQueryRequest(value: unknown): value is ShardQueryRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.SHARD_QUERY &&
+    typeof obj.shard === 'string' &&
+    typeof obj.sql === 'string' &&
+    obj.sql !== ''
+  );
+}
+
+/**
+ * Check if value is a valid ShardExecuteRequest
+ */
+export function isShardExecuteRequest(value: unknown): value is ShardExecuteRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.SHARD_EXECUTE &&
+    typeof obj.shard === 'string' &&
+    typeof obj.sql === 'string' &&
+    obj.sql !== ''
+  );
+}
+
+/**
+ * Check if value is a valid ShardBatchRequest
+ */
+export function isShardBatchRequest(value: unknown): value is ShardBatchRequest {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.SHARD_BATCH &&
+    typeof obj.shard === 'string' &&
+    Array.isArray(obj.statements)
+  );
+}
+
+/**
+ * Check if value is a valid QueryResponse
+ */
+export function isQueryResponse(value: unknown): value is QueryResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.RESULT &&
+    isQueryResult(obj.result)
+  );
+}
+
+/**
+ * Check if value is a valid ExecuteResponse
+ */
+export function isExecuteResponse(value: unknown): value is ExecuteResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.RESULT &&
+    isExecuteResult(obj.result)
+  );
+}
+
+/**
+ * Check if value is a valid BatchResponse
+ */
+export function isBatchResponse(value: unknown): value is BatchResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.RESULT &&
+    isBatchResult(obj.result)
+  );
+}
+
+/**
+ * Check if value is a valid BeginResponse
+ */
+export function isBeginResponse(value: unknown): value is BeginResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.RESULT &&
+    typeof obj.txId === 'string' &&
+    Array.isArray(obj.shards)
+  );
+}
+
+/**
+ * Check if value is a valid StatusResponse
+ */
+export function isStatusResponse(value: unknown): value is StatusResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.RESULT &&
+    isClusterStatus(obj.status)
+  );
+}
+
+/**
+ * Check if value is a valid HealthResponse
+ */
+export function isHealthResponse(value: unknown): value is HealthResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  if (obj.type !== MessageType.RESULT) {
+    return false;
+  }
+  if (Array.isArray(obj.health)) {
+    return obj.health.every(isShardHealth);
+  }
+  return isShardHealth(obj.health);
+}
+
+/**
+ * Check if value is a valid SchemaResponse
+ */
+export function isSchemaResponse(value: unknown): value is SchemaResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.RESULT &&
+    Array.isArray(obj.tables)
+  );
+}
+
+/**
+ * Check if value is a valid VSchemaResponse
+ */
+export function isVSchemaResponse(value: unknown): value is VSchemaResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.RESULT &&
+    isVSchema(obj.vschema)
+  );
+}
+
+/**
+ * Check if value is a valid ErrorResponse
+ */
+export function isErrorResponse(value: unknown): value is ErrorResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    obj.type === MessageType.ERROR &&
+    typeof obj.code === 'string' &&
+    typeof obj.message === 'string'
+  );
+}
+
+/**
+ * Check if value is a valid AckResponse
+ */
+export function isAckResponse(value: unknown): value is AckResponse {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  return (value as Record<string, unknown>).type === MessageType.ACK;
+}
+
+/**
+ * Check if value is any valid Request type
+ */
+export function isRequest(value: unknown): value is Request {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const type = (value as RpcMessage).type;
+  return (
+    type === MessageType.QUERY ||
+    type === MessageType.EXECUTE ||
+    type === MessageType.BATCH ||
+    type === MessageType.BEGIN ||
+    type === MessageType.COMMIT ||
+    type === MessageType.ROLLBACK ||
+    type === MessageType.STATUS ||
+    type === MessageType.HEALTH ||
+    type === MessageType.SCHEMA ||
+    type === MessageType.VSCHEMA ||
+    type === MessageType.SHARD_QUERY ||
+    type === MessageType.SHARD_EXECUTE ||
+    type === MessageType.SHARD_BATCH
+  );
+}
+
+/**
+ * Check if value is any valid Response type
+ */
+export function isResponse(value: unknown): value is Response {
+  if (!isRpcMessage(value)) {
+    return false;
+  }
+  const type = (value as RpcMessage).type;
+  return (
+    type === MessageType.RESULT ||
+    type === MessageType.ERROR ||
+    type === MessageType.ACK
+  );
+}

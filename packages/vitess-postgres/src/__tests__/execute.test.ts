@@ -241,8 +241,9 @@ describe('PGliteAdapter Execute', () => {
       );
       expect(result.affected).toBe(2);
 
+      // PGlite returns number for COUNT (not bigint like native Postgres)
       const query = await adapter.query("SELECT COUNT(*) as count FROM products WHERE category = 'Tech'");
-      expect(query.rows[0].count).toBe(2n);
+      expect(query.rows[0].count).toBe(2);
     });
 
     it('should update with parameters', async () => {
@@ -317,24 +318,27 @@ describe('PGliteAdapter Execute', () => {
       const result = await adapter.execute("DELETE FROM products WHERE name = 'Delete1'");
       expect(result.affected).toBe(1);
 
+      // PGlite returns number for COUNT (not bigint like native Postgres)
       const query = await adapter.query('SELECT COUNT(*) as count FROM products');
-      expect(query.rows[0].count).toBe(2n);
+      expect(query.rows[0].count).toBe(2);
     });
 
     it('should delete multiple rows', async () => {
       const result = await adapter.execute("DELETE FROM products WHERE category = 'A'");
       expect(result.affected).toBe(2);
 
+      // PGlite returns number for COUNT (not bigint like native Postgres)
       const query = await adapter.query('SELECT COUNT(*) as count FROM products');
-      expect(query.rows[0].count).toBe(1n);
+      expect(query.rows[0].count).toBe(1);
     });
 
     it('should delete all rows with no WHERE clause', async () => {
       const result = await adapter.execute('DELETE FROM products');
       expect(result.affected).toBe(3);
 
+      // PGlite returns number for COUNT (not bigint like native Postgres)
       const query = await adapter.query('SELECT COUNT(*) as count FROM products');
-      expect(query.rows[0].count).toBe(0n);
+      expect(query.rows[0].count).toBe(0);
     });
 
     it('should delete with parameters', async () => {
@@ -375,11 +379,12 @@ describe('PGliteAdapter Execute', () => {
       // Delete the product - order should be cascade deleted
       await adapter.execute('DELETE FROM products WHERE id = $1', [productId]);
 
+      // PGlite returns number for COUNT (not bigint like native Postgres)
       const orderQuery = await adapter.query(
         'SELECT COUNT(*) as count FROM orders WHERE product_id = $1',
         [productId]
       );
-      expect(orderQuery.rows[0].count).toBe(0n);
+      expect(orderQuery.rows[0].count).toBe(0);
     });
   });
 
@@ -513,8 +518,9 @@ describe('PGliteAdapter Execute', () => {
         expect(result.affected).toBe(1);
       });
 
+      // PGlite returns number for COUNT (not bigint like native Postgres)
       const count = await adapter.query('SELECT COUNT(*) as count FROM products');
-      expect(count.rows[0].count).toBe(10n);
+      expect(count.rows[0].count).toBe(10);
     });
 
     it('should serialize writes correctly', async () => {

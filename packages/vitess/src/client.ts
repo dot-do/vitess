@@ -212,7 +212,7 @@ export class VitessClient {
     const beginResponse = await this.request(beginRequest);
 
     if (beginResponse.type === MessageType.ERROR) {
-      throw new VitessError(beginResponse.code, beginResponse.message);
+      throw new VitessError(beginResponse.code, beginResponse.message, beginResponse.shard);
     }
 
     const { txId, shards } = beginResponse as { txId: string; shards: string[] };
@@ -276,7 +276,12 @@ export class VitessClient {
       await tx.commit();
       return result;
     } catch (error) {
-      await tx.rollback();
+      // Attempt rollback but don't let rollback errors mask the original error
+      try {
+        await tx.rollback();
+      } catch {
+        // Ignore rollback errors - propagate the original error
+      }
       throw error;
     }
   }
@@ -320,10 +325,12 @@ export class VitessClient {
   }
 
   /**
-   * Send RPC request to VTGate
+   * Send RPC request to VTGate with retry logic
    */
   private async request(message: any): Promise<any> {
     const { maxAttempts, backoffMs } = this.config.retry!;
+    let lastError: Error | undefined;
+    let firstHttpError: Error | undefined;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -337,18 +344,55 @@ export class VitessClient {
           signal: AbortSignal.timeout(this.config.timeout!),
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Handle HTTP errors
+        if (!response || !response.ok) {
+          const status = response?.status ?? 0;
+          const statusText = response?.statusText ?? 'Unknown Error';
+          const httpError = new Error(`HTTP ${status}: ${statusText}`);
+
+          // Don't retry on 4xx client errors - they're not transient
+          if (status >= 400 && status < 500) {
+            throw httpError;
+          }
+
+          // Don't retry on undefined/invalid responses (status 0) - throw first HTTP error if we have one
+          if (status === 0 && firstHttpError) {
+            throw firstHttpError;
+          }
+
+          // Track the first HTTP error for better error reporting
+          if (!firstHttpError && status >= 500) {
+            firstHttpError = httpError;
+          }
+
+          // Retry on 5xx server errors
+          lastError = httpError;
+          if (attempt === maxAttempts) {
+            // Prefer the first HTTP error over later ones (e.g., connection issues during retry)
+            throw firstHttpError || lastError;
+          }
+          await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
+          continue;
         }
 
         return await response.json();
       } catch (error) {
-        if (attempt === maxAttempts) {
+        // If it's an HTTP 4xx error, don't retry
+        if (error instanceof Error && error.message.startsWith('HTTP 4')) {
           throw error;
+        }
+
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (attempt === maxAttempts) {
+          // Prefer the first HTTP error over later network errors
+          throw firstHttpError || lastError;
         }
         await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
       }
     }
+
+    // This should never be reached, but TypeScript needs it
+    throw firstHttpError || lastError || new Error('Request failed');
   }
 }
 

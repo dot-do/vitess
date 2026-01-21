@@ -236,7 +236,8 @@ describe('PGliteAdapter Query', () => {
         ORDER BY user_id
       `);
       expect(result.rows).toHaveLength(2);
-      expect(result.rows[0]).toEqual({ user_id: 1, post_count: 2n }); // COUNT returns bigint
+      // PGlite returns number for COUNT (not bigint like native Postgres)
+      expect(result.rows[0]).toEqual({ user_id: 1, post_count: 2 });
     });
 
     it('should handle subqueries', async () => {
@@ -298,7 +299,8 @@ describe('PGliteAdapter Query', () => {
         FROM users
       `);
       expect(result.rows).toHaveLength(3);
-      expect(result.rows.find(r => r.name === 'Charlie')?.rank).toBe(1n);
+      // PGlite returns number for ROW_NUMBER (not bigint like native Postgres)
+      expect(result.rows.find(r => r.name === 'Charlie')?.rank).toBe(1);
     });
   });
 
@@ -395,8 +397,9 @@ describe('PGliteAdapter Query', () => {
 
     it('should serialize queries correctly', async () => {
       // Run many queries concurrently to test serialization
+      // Use explicit integer cast to ensure numeric return type
       const promises = Array.from({ length: 10 }, (_, i) =>
-        adapter.query('SELECT $1 as num', [i])
+        adapter.query('SELECT $1::int as num', [i])
       );
 
       const results = await Promise.all(promises);
