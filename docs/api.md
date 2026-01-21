@@ -1,6 +1,6 @@
 # Vitess.do API Reference
 
-Complete API documentation for the vitess.do distributed sharding platform.
+Complete API documentation for the Vitess.do distributed sharding platform. This reference covers the client SDK, server components, storage engines, and RPC protocol.
 
 ## Table of Contents
 
@@ -998,3 +998,15 @@ const error = createErrorResponse(
   { shard: '-80' }
 );
 ```
+
+---
+
+## Related Documentation
+
+- [Getting Started](./getting-started.md) - Installation and first queries
+- [Architecture](./architecture.md) - System design and data flow
+- [Migration Guide](./migration.md) - Moving from other databases
+- [@dotdo/vitess](../packages/vitess/README.md) - Main SDK package
+- [@dotdo/vitess-rpc](../packages/vitess-rpc/README.md) - Protocol types
+- [@dotdo/vitess-postgres](../packages/vitess-postgres/README.md) - PostgreSQL engine
+- [@dotdo/vitess-sqlite](../packages/vitess-sqlite/README.md) - SQLite engine

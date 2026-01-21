@@ -1,8 +1,8 @@
 # @dotdo/vitess-postgres
 
-PostgreSQL storage engine for Vitess.do using [PGlite](https://github.com/electric-sql/pglite).
+PostgreSQL storage engine for Vitess.do, powered by [PGlite](https://github.com/electric-sql/pglite).
 
-Provides full PostgreSQL compatibility via WebAssembly, running entirely in-process without a separate database server.
+Provides **full PostgreSQL compatibility** via WebAssembly, running entirely in-process without a separate database server. Ideal for applications requiring advanced SQL features, JSONB, or strict type fidelity.
 
 ## Installation
 
@@ -315,11 +315,11 @@ The adapter implements the Vitess storage engine interface:
 import { VTTablet, PGliteEngine } from '@dotdo/vitess/server';
 import { PGliteAdapter } from '@dotdo/vitess-postgres';
 
-// Create adapter
+// Create and initialize adapter
 const adapter = new PGliteAdapter({ dataDir: '/data/shard-0' });
 await adapter.init();
 
-// Use with VTTablet
+// Use with VTTablet Durable Object
 const tablet = new VTTablet({
   shard: '-80',
   keyspace: 'main',
@@ -327,13 +327,29 @@ const tablet = new VTTablet({
 });
 ```
 
+## When to Use PGlite vs Turso
+
+| Factor | PGlite (PostgreSQL) | Turso (SQLite) |
+|--------|---------------------|----------------|
+| SQL compatibility | Full PostgreSQL | SQLite + translation |
+| Cold start | ~200ms | ~50ms |
+| Memory usage | Higher | Lower |
+| JSONB support | Native | JSON as text |
+| Best for | Complex queries, strict types | High scale, edge workloads |
+
+## Documentation
+
+- [Getting Started Guide](../../docs/getting-started.md)
+- [Architecture Overview](../../docs/architecture.md)
+- [API Reference](../../docs/api.md)
+
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
-| `@dotdo/vitess` | Main SDK (client + server) |
-| `@dotdo/vitess-rpc` | RPC protocol types |
-| `@dotdo/vitess-sqlite` | SQLite storage engine |
+| [@dotdo/vitess](../vitess/README.md) | Main SDK (client + server) |
+| [@dotdo/vitess-rpc](../vitess-rpc/README.md) | RPC protocol types |
+| [@dotdo/vitess-sqlite](../vitess-sqlite/README.md) | SQLite storage engine |
 
 ## License
 

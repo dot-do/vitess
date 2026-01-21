@@ -1,8 +1,10 @@
 # @dotdo/vitess-rpc
 
-CapnWeb RPC protocol and unified types for Vitess.do.
+CapnWeb RPC protocol and unified type definitions for Vitess.do.
 
-This package defines the wire protocol between VitessClient and VTGate, and between VTGate and VTTablet Durable Objects.
+This package defines the wire protocol for communication between:
+- **VitessClient** and **VTGate** (client-to-server)
+- **VTGate** and **VTTablet** Durable Objects (server-to-shard)
 
 ## Installation
 
@@ -10,13 +12,15 @@ This package defines the wire protocol between VitessClient and VTGate, and betw
 npm install @dotdo/vitess-rpc
 ```
 
+> **Note:** Most users should install `@dotdo/vitess` instead, which re-exports all necessary types. Install this package directly only if you need protocol-level access.
+
 ## Overview
 
 The RPC protocol is designed to be:
 
 - **Backend-agnostic**: Works identically with PostgreSQL and SQLite storage engines
 - **Type-safe**: Full TypeScript support with type guards and validation
-- **Efficient**: Minimal serialization overhead with JSON transport
+- **Efficient**: Minimal serialization overhead using JSON transport
 
 ## Type Exports
 
@@ -319,24 +323,35 @@ const message = deserializeMessage(json);
 
 ## Protocol Subpath Export
 
-For advanced use cases, protocol types can be imported directly:
+For advanced use cases, protocol request and response types can be imported directly:
 
 ```typescript
-import {
+import type {
   QueryRequest,
   ExecuteRequest,
+  BatchRequest,
+  BeginRequest,
+  CommitRequest,
+  RollbackRequest,
   QueryResponse,
+  ExecuteResponse,
   ErrorResponse,
+  AckResponse,
 } from '@dotdo/vitess-rpc/protocol';
 ```
+
+## Documentation
+
+- [Architecture Overview](../../docs/architecture.md) - Protocol flow diagrams
+- [API Reference](../../docs/api.md) - Full type documentation
 
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
-| `@dotdo/vitess` | Main SDK (client + server) |
-| `@dotdo/vitess-postgres` | PostgreSQL storage engine |
-| `@dotdo/vitess-sqlite` | SQLite storage engine |
+| [@dotdo/vitess](../vitess/README.md) | Main SDK (client + server) |
+| [@dotdo/vitess-postgres](../vitess-postgres/README.md) | PostgreSQL storage engine |
+| [@dotdo/vitess-sqlite](../vitess-sqlite/README.md) | SQLite storage engine |
 
 ## License
 

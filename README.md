@@ -1,17 +1,17 @@
 # Vitess.do
 
-Vitess-style distributed sharding for Cloudflare Workers/Durable Objects.
+Vitess-style distributed sharding for Cloudflare Workers and Durable Objects.
 
-**Supports both PostgreSQL (PGlite) and SQLite (Turso) backends.**
+Provides **automatic query routing**, **cross-shard transactions**, and **horizontal scaling** with support for both **PostgreSQL (PGlite)** and **SQLite (Turso)** backends.
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| `@dotdo/vitess` | Client SDK + VTGate/VTTablet server runtime |
-| `@dotdo/vitess-rpc` | CapnWeb RPC protocol and unified types |
-| `@dotdo/vitess-postgres` | PostgreSQL storage engine (PGlite) |
-| `@dotdo/vitess-sqlite` | SQLite storage engine (Turso/libSQL) |
+| [@dotdo/vitess](./packages/vitess/README.md) | Client SDK + VTGate/VTTablet server runtime |
+| [@dotdo/vitess-rpc](./packages/vitess-rpc/README.md) | CapnWeb RPC protocol and unified types |
+| [@dotdo/vitess-postgres](./packages/vitess-postgres/README.md) | PostgreSQL storage engine (PGlite) |
+| [@dotdo/vitess-sqlite](./packages/vitess-sqlite/README.md) | SQLite storage engine (Turso/libSQL) |
 
 ## Architecture
 
@@ -99,6 +99,31 @@ Lightweight, fast SQLite via Turso. Use `@dotdo/vitess-sqlite`.
 - Edge-sync capable
 - Smaller footprint
 - Accepts Postgres dialect with auto-translation
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Getting Started](./docs/getting-started.md) | Installation and first queries |
+| [Architecture](./docs/architecture.md) | System overview and component design |
+| [API Reference](./docs/api.md) | Complete API documentation |
+| [Migration Guide](./docs/migration.md) | Migrating from other solutions |
+
+### Package READMEs
+
+- [@dotdo/vitess](./packages/vitess/README.md) - Client SDK and server runtime
+- [@dotdo/vitess-rpc](./packages/vitess-rpc/README.md) - RPC protocol and types
+- [@dotdo/vitess-postgres](./packages/vitess-postgres/README.md) - PostgreSQL storage engine
+- [@dotdo/vitess-sqlite](./packages/vitess-sqlite/README.md) - SQLite storage engine
+
+## Quick Start
+
+```bash
+# Install the SDK and a storage engine
+npm install @dotdo/vitess @dotdo/vitess-postgres
+```
+
+See [Getting Started](./docs/getting-started.md) for detailed installation and usage instructions.
 
 ## Status
 

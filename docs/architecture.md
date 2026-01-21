@@ -1,6 +1,6 @@
 # Vitess.do Architecture
 
-Vitess.do brings Vitess-style distributed sharding to Cloudflare Workers and Durable Objects. This document explains the core components and how they work together.
+Vitess.do brings Vitess-style distributed sharding to Cloudflare Workers and Durable Objects. This document explains the core components, data flow, and how they work together to provide horizontal scaling with automatic query routing.
 
 ## Architecture Overview
 
@@ -394,10 +394,22 @@ export { VTTablet };
 - **Cross-shard transactions** require 2PC (additional latency)
 - **Read-only transactions** can be optimized
 
+## Summary
+
+Vitess.do provides a production-grade distributed database architecture for Cloudflare Workers:
+
+- **VTGate** handles query parsing, shard routing, and result aggregation
+- **VTTablet** Durable Objects execute queries on individual shards
+- **VSchema** declaratively defines how tables are sharded
+- **Vindexes** determine how rows map to shards
+- Both **PostgreSQL** and **SQLite** backends are supported with identical client APIs
+
 ## Related Documentation
 
 - [Getting Started](./getting-started.md) - Installation and first queries
-- [@dotdo/vitess README](../packages/vitess/README.md) - Client API reference
-- [@dotdo/vitess-rpc README](../packages/vitess-rpc/README.md) - Protocol details
-- [@dotdo/vitess-postgres README](../packages/vitess-postgres/README.md) - PostgreSQL engine
-- [@dotdo/vitess-sqlite README](../packages/vitess-sqlite/README.md) - SQLite engine
+- [API Reference](./api.md) - Complete API documentation
+- [Migration Guide](./migration.md) - Moving to vitess.do from other solutions
+- [@dotdo/vitess](../packages/vitess/README.md) - Client API reference
+- [@dotdo/vitess-rpc](../packages/vitess-rpc/README.md) - Protocol details
+- [@dotdo/vitess-postgres](../packages/vitess-postgres/README.md) - PostgreSQL engine
+- [@dotdo/vitess-sqlite](../packages/vitess-sqlite/README.md) - SQLite engine

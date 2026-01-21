@@ -1,6 +1,6 @@
-# Landing Page Copy for vitess.do
+# Landing Page Copy for Vitess.do
 
-Content and copy for the vitess.do marketing website.
+Content and copy for the Vitess.do marketing website. This document provides ready-to-use copy for all landing page sections.
 
 ---
 
@@ -497,3 +497,12 @@ Horizontal database scaling for Cloudflare Workers. Automatic query routing, cro
 - horizontal scaling workers
 - multi-tenant database
 - edge database sharding
+
+---
+
+## Related Documentation
+
+- [Getting Started](./getting-started.md) - Technical onboarding guide
+- [Architecture](./architecture.md) - System design details
+- [API Reference](./api.md) - Complete API documentation
+- [Documentation Site Structure](./docsite-structure.md) - Site organization

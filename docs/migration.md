@@ -1,6 +1,6 @@
 # Migration Guide
 
-This guide covers migrating to vitess.do from various starting points.
+This guide covers migrating to Vitess.do from various starting points, including raw PGlite, single-node databases, and other sharding solutions. Each section provides step-by-step instructions with code examples.
 
 ## Table of Contents
 
@@ -601,9 +601,9 @@ To change the number of shards:
 
 ## Checklist
 
-Before going live with vitess.do:
+Before going live with Vitess.do:
 
-- [ ] Sharding key chosen and tested for distribution
+- [ ] Sharding key chosen and tested for even distribution
 - [ ] VSchema defined for all tables
 - [ ] Queries updated to include sharding key where possible
 - [ ] Cross-shard queries identified and optimized
@@ -612,3 +612,14 @@ Before going live with vitess.do:
 - [ ] Monitoring and alerting configured
 - [ ] Rollback plan documented
 - [ ] Load testing completed
+
+---
+
+## Related Documentation
+
+- [Getting Started](./getting-started.md) - Installation and first queries
+- [Architecture](./architecture.md) - VTGate, VTTablet, and sharding concepts
+- [API Reference](./api.md) - Complete API documentation
+- [@dotdo/vitess](../packages/vitess/README.md) - Main SDK
+- [@dotdo/vitess-postgres](../packages/vitess-postgres/README.md) - PostgreSQL backend
+- [@dotdo/vitess-sqlite](../packages/vitess-sqlite/README.md) - SQLite backend

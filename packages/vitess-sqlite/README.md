@@ -1,8 +1,8 @@
 # @dotdo/vitess-sqlite
 
-SQLite storage engine for Vitess.do using [Turso/libSQL](https://turso.tech/).
+SQLite storage engine for Vitess.do, powered by [Turso/libSQL](https://turso.tech/).
 
-Supports local SQLite files, in-memory databases, and Turso cloud with optional **PostgreSQL dialect translation**.
+Supports local SQLite files, in-memory databases, and Turso cloud with optional **PostgreSQL dialect translation**. Ideal for lightweight workloads, fast cold starts, and edge deployments.
 
 ## Installation
 
@@ -383,13 +383,30 @@ const tablet = new VTTablet({
 });
 ```
 
+## When to Use Turso vs PGlite
+
+| Factor | Turso (SQLite) | PGlite (PostgreSQL) |
+|--------|----------------|---------------------|
+| Cold start | ~50ms | ~200ms |
+| Memory usage | Lower | Higher |
+| SQL compatibility | SQLite + translation | Full PostgreSQL |
+| JSONB support | JSON as text | Native |
+| Edge sync | Yes (Turso cloud) | No |
+| Best for | High scale, edge workloads | Complex queries, strict types |
+
+## Documentation
+
+- [Getting Started Guide](../../docs/getting-started.md)
+- [Architecture Overview](../../docs/architecture.md)
+- [API Reference](../../docs/api.md)
+
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
-| `@dotdo/vitess` | Main SDK (client + server) |
-| `@dotdo/vitess-rpc` | RPC protocol types |
-| `@dotdo/vitess-postgres` | PostgreSQL storage engine |
+| [@dotdo/vitess](../vitess/README.md) | Main SDK (client + server) |
+| [@dotdo/vitess-rpc](../vitess-rpc/README.md) | RPC protocol types |
+| [@dotdo/vitess-postgres](../vitess-postgres/README.md) | PostgreSQL storage engine |
 
 ## License
 

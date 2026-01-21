@@ -1,11 +1,12 @@
 # Getting Started with Vitess.do
 
-This guide walks you through installing Vitess.do, running your first query, and using transactions.
+This guide walks you through installing Vitess.do, running your first query, and working with transactions. By the end, you will understand how to use both the client SDK and direct storage engine access.
 
 ## Prerequisites
 
 - Node.js 18+ or Bun
 - npm, pnpm, or yarn
+- A Cloudflare account (for deployment)
 
 ## Installation
 
@@ -325,12 +326,18 @@ try {
 
 ## Next Steps
 
-- Read the [Architecture Guide](./architecture.md) to understand VTGate, VTTablet, and sharding
-- Explore the package READMEs for detailed API documentation:
-  - [@dotdo/vitess](../packages/vitess/README.md) - Main SDK
-  - [@dotdo/vitess-postgres](../packages/vitess-postgres/README.md) - PostgreSQL backend
-  - [@dotdo/vitess-sqlite](../packages/vitess-sqlite/README.md) - SQLite backend
-  - [@dotdo/vitess-rpc](../packages/vitess-rpc/README.md) - Protocol types
+Now that you have run your first queries, explore the rest of the documentation:
+
+- [Architecture Guide](./architecture.md) - Understand VTGate, VTTablet, and sharding concepts
+- [API Reference](./api.md) - Complete API documentation
+- [Migration Guide](./migration.md) - Migrate from other databases or single-node setups
+
+For package-specific details:
+
+- [@dotdo/vitess](../packages/vitess/README.md) - Main SDK
+- [@dotdo/vitess-postgres](../packages/vitess-postgres/README.md) - PostgreSQL backend
+- [@dotdo/vitess-sqlite](../packages/vitess-sqlite/README.md) - SQLite backend
+- [@dotdo/vitess-rpc](../packages/vitess-rpc/README.md) - Protocol types
 
 ## Troubleshooting
 

@@ -1,6 +1,6 @@
 # Documentation Site Structure
 
-Architecture and organization for the vitess.do documentation website.
+Architecture and organization for the Vitess.do documentation website. This document serves as a blueprint for building the documentation site, including navigation, page templates, and content guidelines.
 
 ---
 
@@ -566,3 +566,12 @@ npm run docs:deploy
 3. Validate code examples
 4. Build static site
 5. Deploy to Cloudflare Pages
+
+---
+
+## Related Documentation
+
+- [Landing Page Copy](./landing-page.md) - Marketing content
+- [Getting Started](./getting-started.md) - Technical onboarding
+- [Architecture](./architecture.md) - System design
+- [API Reference](./api.md) - Complete API documentation
