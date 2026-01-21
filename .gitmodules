@@ -1,0 +1,6 @@
+[submodule "packages/pglite"]
+	path = packages/pglite
+	url = https://github.com/electric-sql/pglite.git
+[submodule "packages/libsql"]
+	path = packages/libsql
+	url = https://github.com/tursodatabase/libsql-js.git
